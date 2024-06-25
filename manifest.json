@@ -1,7 +1,7 @@
 {
 	"id": "fbuz74-dashboard",
 	"name": "FBUZ74 Dashboard",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"minAppVersion": "0.15.0",
 	"description": "Demonstrates some of the capabilities of the Obsidian API.",
 	"author": "Obsidian",
