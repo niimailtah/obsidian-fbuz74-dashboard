@@ -48,7 +48,7 @@ export class ContractModal extends Modal {
         new Setting(contentEl)
             .addButton((btn) =>
                 btn
-                    .setButtonText("Submit")
+                    .setButtonText("Добавить договор")
                     .setCta()
                     .onClick(() => {
                         this.close();
@@ -96,7 +96,7 @@ export class RefundModal extends Modal {
         new Setting(contentEl)
             .addButton((btn) =>
                 btn
-                    .setButtonText("Submit")
+                    .setButtonText("Добавить возврат")
                     .setCta()
                     .onClick(() => {
                         this.close();

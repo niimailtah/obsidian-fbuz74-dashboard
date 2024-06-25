@@ -12,7 +12,7 @@
     "isolatedModules": true,
     "strictNullChecks": true,
     "types": [
-      "obsidian-typings"
+      // "obsidian-typings"
     ],
     "lib": [
       "DOM",

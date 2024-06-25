@@ -16,8 +16,12 @@ import {
     ContractModalProps, ContractModal,
     RefundModalProps, RefundModal,
 } from "./modal";
-import { ObsidianIO } from "../ObsidianAdapter";
-import MyPlugin from "../main";
+import FBUZ74DashboardPlugin from "../main";
+import {
+    openOrSwitch,
+    addMD,
+    wait
+} from "obsidian-community-lib"
 
 declare interface UserScriptFunctions {
     readonly load_user_script_function: (
@@ -43,16 +47,16 @@ declare interface TemplaterPlugin extends Plugin {
     readonly templater: Templater
 }
 
-export const SAMPLE_VIEW_TYPE = "sample-view";
+export const DASHBOARD_VIEW_TYPE = "dashboard-view";
 
-export class SampleView extends ItemView {
-    plugin: MyPlugin;
+export class DashboardView extends ItemView {
+    plugin: FBUZ74DashboardPlugin;
     hasCreated: boolean;
     result: string;
 
     constructor(
         leaf: WorkspaceLeaf,
-        plugin: MyPlugin
+        plugin: FBUZ74DashboardPlugin
     ) {
         super(leaf);
         this.plugin = plugin;
@@ -61,11 +65,11 @@ export class SampleView extends ItemView {
     }
 
     getViewType() {
-        return SAMPLE_VIEW_TYPE;
+        return DASHBOARD_VIEW_TYPE;
     }
 
     getDisplayText() {
-        return "Sample Plugin";
+        return "ФБУЗ ЦГиЭ Dashboard";
     }
 
     async createAndOpenFile(
@@ -78,26 +82,42 @@ export class SampleView extends ItemView {
         const tp = this.app.plugins.plugins["templater-obsidian"].templater.current_functions_object;
         const templateFile: TFile = tp.file.find_tfile(templateName);
         const rootFolder = this.app.vault.getAbstractFileByPath(rootFolderName);
-        if (!await this.app.vault.getAbstractFileByPath(`${rootFolderName}/${folderName}`)) {
-            // if path doesnt exist, create folders
+
+        // if path doesnt exist, create folders
+        if (!this.app.vault.getAbstractFileByPath(`${rootFolderName}/${folderName}`)) {
             await this.app.vault.createFolder(`${rootFolderName}/${folderName}`)
         }
-        // создаем файл по шаблону и возвращаем TFile
-        const newFile: TFile = await tp.file.create_new(templateFile,
-            `${folderName}/${fileName}`,
-            false,
-            rootFolder);
-
-        // создаем пустую новую заклвдку WorkspaceLeaf
-        const leaf: WorkspaceLeaf = this.app.workspace.getLeaf(true);
-        // загружаем в закладку только что созданный файл
-        await leaf.openFile(newFile);
-        // перемещаем курсор
-        const editor = this.app.workspace.getActiveViewOfType(MarkdownView)?.editor;
-        if (editor) {
-            const position: EditorPosition = { line: 1, ch: 1 };
-            editor.setCursor(position);
+        if (!this.app.vault.getAbstractFileByPath(`${rootFolderName}/${folderName}/${addMD(fileName)}`)) {
+            // создаем файл по шаблону и возвращаем TFile
+            await tp.file.create_new(templateFile,
+                `${folderName}/${fileName}`,
+                false,
+                rootFolder);
         }
+        let tabFound: boolean = false;
+        // пробегаемся по всем листам в том числе и закладкам
+        this.app.workspace.iterateAllLeaves(leaf => {
+            const viewState = leaf.getViewState()
+            // ищем закладку с заметкой с заданным именем
+            if (viewState.type === 'markdown' &&
+                viewState.state?.file?.startsWith(rootFolderName) &&
+                viewState.state?.file?.endsWith(`${addMD(fileName)}`)) {
+                // Активируем найденную закладку
+                this.app.workspace.setActiveLeaf(leaf);
+                tabFound = true;
+            }
+        });
+        if (!tabFound) {
+            await openOrSwitch(`${rootFolderName}/${folderName}/${fileName}`,
+                new MouseEvent("mouseover"),
+                { createNewFile: false });
+        }
+        // // перемещаем курсор
+        // const editor = this.app.workspace.getActiveViewOfType(MarkdownView)?.editor;
+        // if (editor) {
+        //     const position: EditorPosition = { line: 1, ch: 1 };
+        //     editor.setCursor(position);
+        // }
     }
 
     async createNote(section: string) {
@@ -142,7 +162,7 @@ export class SampleView extends ItemView {
             contractNumber: contractNumber,
             contractDate: contractDate
         });
-        this.createAndOpenFile(templateName, rootFolderName, folderName, fileName);
+        await this.createAndOpenFile(templateName, rootFolderName, folderName, fileName);
         new Notice(`Создан договор ${contractNumber} от ${contractDate}`);
     }
 
@@ -158,13 +178,12 @@ export class SampleView extends ItemView {
         tp.user.pass_vars().setGlobalVar({
             refundNumber: payNumber
         });
-        this.createAndOpenFile(templateName, rootFolderName, folderName, fileName);
+        await this.createAndOpenFile(templateName, rootFolderName, folderName, fileName);
         new Notice(`Создан возврат ${payNumber}`);
     }
 
     async onOpen() {
         await this.plugin.loadSettings();
-        console.log("SampleView::onOpen()...")
 
         if (!this.hasCreated) {
             // this.containerEl.addClass("conductor-notes-modal");
@@ -196,39 +215,30 @@ export class SampleView extends ItemView {
 
                                 const folderName = "GigTest/Договоры";
                                 const fileName = "contracts"
-                                // проверяем на существование файла
-                                let fullFileName = `${folderName}/${fileName}.md`;
-                                //@ts-ignore
-                                const tp = this.app.plugins.plugins["templater-obsidian"].templater.current_functions_object;
+                                let fullFileName = `${folderName}/${addMD(fileName)}`;
 
-                                let noteExists = await tp.file.exists(fullFileName);
-                                if (noteExists) {
-                                    let tabFound = false;
+                                if (!this.app.vault.getAbstractFileByPath(fullFileName)) {
+                                    console.log(`File ${fullFileName} doesn't found`);
+                                }
+                                else {
+                                    let tabFound: boolean = false;
                                     // пробегаемся по всем листам в том числе и закладкам
                                     this.app.workspace.iterateAllLeaves(leaf => {
                                         const viewState = leaf.getViewState()
-                                        // ищем закладку с заметкой и с заданным именем
+                                        // ищем закладку с заметкой с заданным именем
                                         if (viewState.type === 'markdown' &&
-                                            viewState.state?.file?.endsWith(`${fileName}.md`)) {
+                                            viewState.state?.file == fullFileName) {
                                             // Активируем найденную закладку
                                             this.app.workspace.setActiveLeaf(leaf);
                                             tabFound = true;
                                         }
                                     });
                                     if (!tabFound) {
-                                        // объект TFile, ссылающийся на заметку
-                                        const folderOrFile = app.vault.getAbstractFileByPath(fullFileName);
-                                        if (folderOrFile instanceof TFile) {
-                                            // создаем пустую новую заклвдку WorkspaceLeaf
-                                            let leaf = this.app.workspace.getLeaf(true);
-                                            // загружаем а закладку только что созданный файл
-                                            await leaf.openFile(folderOrFile);
-                                        } else if (folderOrFile instanceof TFolder) {
-                                            console.log("It's a folder!");
-                                        }
+                                        await openOrSwitch(fullFileName,
+                                            new MouseEvent("mouseover"),
+                                            { createNewFile: false });
                                     }
                                 }
-
                             });
                         commandBtns
                             .createEl("button", {
@@ -253,45 +263,27 @@ export class SampleView extends ItemView {
 
                                 const folderName = "GigTest/Возвраты";
                                 const fileName = "refunds"
-                                // проверяем на существование файла
-                                let fullFileName = `${folderName}/${fileName}.md`;
-                                // Магия вызова API плагина Templater
-                                // const templater = this.app.plugins.plugins["templater-obsidian"].templater;
-                                // let tp = templater.functions_generator.internal_functions.modules_array;
-                                // let tp_file = tp.find(module => module.name == "file");
-                                // let tp_fileExists = tp_file.static_functions.get("exists");
+                                let fullFileName = `${folderName}/${addMD(fileName)}`;
 
-                                // let noteExists = await tp_fileExists(fullFileName);
-                                //@ts-ignore
-                                const tp = this.app.plugins.plugins["templater-obsidian"].templater.current_functions_object;
-                                let noteExists = await tp.file.exists(fullFileName);
-                                if (noteExists) {
-                                    let tabFound = false;
-                                    // пробегаемся по всем листам в том числе и закладкам
+                                if (!this.app.vault.getAbstractFileByPath(fullFileName)) {
+                                    console.log(`File ${fullFileName} doesn't found`);
+                                }
+                                else {
+                                    let tabFound: boolean = false;
                                     this.app.workspace.iterateAllLeaves(leaf => {
                                         const viewState = leaf.getViewState()
-                                        // ищем закладку с заметкой и с заданным именем
                                         if (viewState.type === 'markdown' &&
-                                            viewState.state?.file?.endsWith(`${fileName}.md`)) {
-                                            // Активируем найденную закладку
+                                            viewState.state?.file == fullFileName) {
                                             this.app.workspace.setActiveLeaf(leaf);
                                             tabFound = true;
                                         }
                                     });
                                     if (!tabFound) {
-                                        // объект TFile, ссылающийся на заметку
-                                        const folderOrFile = app.vault.getAbstractFileByPath(fullFileName);
-                                        if (folderOrFile instanceof TFile) {
-                                            // создаем пустую новую заклвдку WorkspaceLeaf
-                                            let leaf = this.app.workspace.getLeaf(true);
-                                            // загружаем а закладку только что созданный файл
-                                            await leaf.openFile(folderOrFile);
-                                        } else if (folderOrFile instanceof TFolder) {
-                                            console.log("It's a folder!");
-                                        }
+                                        await openOrSwitch(fullFileName,
+                                            new MouseEvent("mouseover"),
+                                            { createNewFile: false });
                                     }
                                 }
-
                             });
                         commandBtns
                             .createEl("button", {
@@ -366,13 +358,6 @@ export class SampleView extends ItemView {
 
             this.hasCreated = true;
         }
-        const app = new ObsidianIO(this.app);
-        const path = "delete_me.md";
-        const file = app.getFileByPath(path);
-        if (!file) {
-            throw new Error(`File ${path} not found.`);
-        }
-        app.delete(file);
     }
 
     async onunload() {
